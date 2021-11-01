@@ -186,3 +186,19 @@ class RMSNorm(nn.Module):
         norm = torch.linalg.norm(x, dim=-1, keepdim=True)
         norm *= self.scale
         return x / norm.clamp(min=self.eps) * self.g
+
+
+## token shifting
+
+
+def shift(t, amount, mask=None):
+    if amount == 0:
+        return t
+    if exists(mask):
+        t = t.masked_fill(~mask[..., None], 0.0)
+    ## here, we are shifting in -2 axis, by padding by -ve amount and +ve amount
+    ## -ve amount of adding essentially cuts down into the axis
+    ## while +ve padding amount inflates that axis
+    ## hence, keeping the size same but effectively shifting
+    pad = (0, 0, -amount, amount)
+    return F.pad(t, pad, value=0.0)
