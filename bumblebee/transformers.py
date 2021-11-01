@@ -103,4 +103,27 @@ def string_begins_with(prefix: str, string: str) -> bool:
     """
     Checks whether the "string" begins with the "prefix"
     """
-    return string.beginswith(prefix)
+    return string.startswith(prefix)
+
+
+def group_dict_by_keys(condition, d: dict):
+    """
+    Groups the given dict "d" into two parts whether the keys satisfy the condition or not
+    """
+    return_values = [dict(), dict()]
+    for key in d.keys():
+        match = bool(condition(key))  ## does the keys satisfy condition?
+        idx = int(not match)  ## idx=0 if the keys staisfy the condition else 1
+        return_values[idx][key] = d[key]
+    return (*return_values,)
+
+
+def group_by_key_prefix(prefix, d: dict):
+    return group_dict_by_keys(partial(string_begins_with, prefix), d)
+
+
+def group_by_prefix_and_trim(prefix, d: dict):
+    kwargs_with_prefix, kwargs = group_by_key_prefix(prefix, d)
+    trimmer = lambda x: (x[0][len(prefix) :], x[1])
+    kwargs_without_prefix = dict(map(trimmer, kwargs_with_prefix.items()))
+    return kwargs_without_prefix, kwargs
