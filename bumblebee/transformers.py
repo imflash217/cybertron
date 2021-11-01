@@ -137,3 +137,52 @@ class ReluSquared(nn.Module):
         return F.relu(input) ** 2
 
 
+## NORMS
+
+
+class Scale(nn.Module):
+    def __init__(self, value, func):
+        super().__init__()
+        self.value = value
+        self.func = func
+
+    def forward(self, x, **kwargs):
+        x, *rest = self.func(x, **kwargs)
+        return (x * self.value, *rest)
+
+
+class ReZero(nn.Module):
+    def __init__(self, func):
+        super().__init__()
+        self.func = func
+        self.g = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x, **kwargs):
+        x, *rest = self.func(x, **kwargs)
+        return (x * self.g, *rest)
+
+
+class ScaleNorm(nn.Module):
+    def __init__(self, dim, eps=1e-5):
+        super().__init__()
+        self.scale = dim ** -0.5
+        self.eps = eps
+        self.g = nn.Parameter(torch.ones(1))
+
+    def forward(self, x):
+        norm = torch.linalg.norm(x, dim=-1, keepdim=True)
+        norm *= self.scale
+        return x / norm.clamp(min=self.eps) * self.g
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-8):
+        super().__init__()
+        self.scale = dim ** -0.5
+        self.eps = eps
+        self.g = nn.parameter(torch.ones(dim))
+
+    def forward(self, x):
+        norm = torch.linalg.norm(x, dim=-1, keepdim=True)
+        norm *= self.scale
+        return x / norm.clamp(min=self.eps) * self.g
