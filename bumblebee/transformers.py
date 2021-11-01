@@ -80,7 +80,7 @@ class not_equals:
 ## helpers => initialization
 
 
-def init_zero_(layer: nn.layer):
+def init_zero_(layer):
     """inplace intializes the weights and biases of the layer to zero"""
     nn.init.constant_(layer.weight, 0.0)
     if exists(layer.bias):
@@ -218,3 +218,40 @@ class GLU(nn.Module):
     def forward(self, x):
         x, gate = self.proj(x).chunk(chunks=2, dim=-1)
         return x * self.act(gate)
+
+
+class FeedForward(nn.Module):
+    def __init__(
+        self,
+        dim,
+        dim_out=None,
+        mult=4,
+        glu=False,
+        relu_squared=False,
+        post_act_ln=False,
+        dropout=0.0,
+        zero_init_output=False,
+    ):
+        super().__init__()
+        dim_hidden = int(dim * mult)
+        dim_out = default(dim_out, dim)
+        act = ReluSquared() if relu_squared else nn.GELU()
+
+        if glu:
+            project_in = GLU(dim, dim_hidden, act)
+        else:
+            project_in = nn.Sequential(nn.Linear(dim, dim_hidden), act)
+
+        self.net = nn.Sequential(
+            project_in,
+            nn.LayerNorm(dim_hidden) if post_act_ln else nn.Identity(),
+            nn.Dropout(dropout),
+            nn.Linear(dim_hidden, dim_out),
+        )
+
+        ## init last linear layer to 0
+        if zero_init_output:
+            init_zero_(self.net[-1])
+
+    def forward(self, x):
+        return self.net(x)
