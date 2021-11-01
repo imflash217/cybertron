@@ -7,6 +7,7 @@ from inspect import isfunction
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from entmax import entmax15
 
 ## constants
 DEFAULT_DIM_HEAD = 64
@@ -255,3 +256,91 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+
+## ATTENTION
+
+
+class Attention(nn.Module):
+    def __init__(
+        self,
+        dim,
+        dim_head=DEFAULT_DIM_HEAD,
+        heads=8,
+        causal=False,
+        mask=None,
+        talking_head=False,
+        head_scale=False,
+        collab_heads=False,
+        collab_compression=0.3,
+        sparse_topk=None,
+        use_entmax15=False,
+        num_mem_kv=0,
+        dropout=0.0,
+        attn_on_attn=False,
+        gate_values=False,
+        zero_init_output=False,
+    ):
+        super().__init__()
+        self.scale = dim_head ** -0.5
+        self.head = heads
+        self.causal = causal
+        self.mask = mask
+
+        dim_qk = dim_v = dim_head * heads
+
+        ## collaborative heads
+        self.collab_heads = collab_heads
+        if self.collab_heads:
+            dim_qk = int(collab_compression * dim_qk)
+            self.collab_mixing = nn.Parameter(torch.randn(heads, dim_qk))
+
+        self.to_q = nn.Linear(dim, dim_qk, bias=False)
+        self.to_k = nn.Linear(dim, dim_qk, bias=False)
+        self.to_v = nn.Linear(dim, dim_v, bias=False)
+
+        self.dropout = nn.Dropout(dropout)
+
+        ## add GLU gating for aggregated values (from "alphafold2" paper)
+        self.to_v_gate = None
+        if self.gate_values:
+            self.to_v_gate = nn.Linear(dim, dim_v)
+            nn.init.constant_(self.to_v_gate.weight, 0.0)
+            nn.init.constant_(self.to_v_gate.bias, 1.0)
+
+        ## talking heads
+        self.talking_heads = talking_heads
+        if self.talking_heads:
+            self.pre_softmax_proj = nn.Parameter(torch.randn(heads, heads))
+            self.post_softmax_proj = nn.Parameter(torch.randn(heads, heads))
+
+        ## head scaling
+        self.head_scale = head_scale
+        if self.head_scale:
+            self.head_scale_params = nn.Parameter(torch.ones(1, heads, 1, 1))
+
+        ## explicit "topk" sparse attention
+        self.sparse_topk = sparse_topk
+
+        ## entmax
+        self.attn_fn = entmax15 if use_entmax15 else F.softmax
+
+        ## add memory key/values
+        self.num_mem_kv = num_mem_kv
+        if self.num_mem_kv > 0:
+            self.mem_k = nn.Parameter(torch.randn(heads, num_mem_kv, dim_head))
+            self.mem_v = nn.Parameter(torch.randn(heads, num_mem_kv, dim_head))
+
+        ## attention on attention
+        self.attn_on_attn = attn_on_attn
+        if self.attn_on_attn:
+            self.to_out = nn.Sequential(nn.Linear(dim_v, dim * 2), nn.GLU())
+        else:
+            self.to_out = nn.Linear(dim_v, dim)
+
+        ## init output projection to 0
+        if zero_init_output:
+            init_zero_(self.to_out)
+
+    def forward(self):
+        ...
