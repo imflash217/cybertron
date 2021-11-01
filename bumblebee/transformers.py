@@ -202,3 +202,17 @@ def shift(t, amount, mask=None):
     ## hence, keeping the size same but effectively shifting
     pad = (0, 0, -amount, amount)
     return F.pad(t, pad, value=0.0)
+
+
+## feedforward
+
+
+class GLU(nn.Module):
+    def __init__(self, in_dim, out_dim, activation):
+        super().__init__()
+        self.act = activation
+        self.proj = nn.Linear(in_dim, out_dim ** 2)
+
+    def forward(self, x):
+        x, gate = self.proj(x).chunk(chunks=2, dim=-1)
+        return x * self.act(gate)
