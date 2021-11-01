@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from entmax import entmax15
+from einops import rearrange, reduce, repeat
 
 ## constants
 DEFAULT_DIM_HEAD = 64
@@ -269,7 +270,7 @@ class Attention(nn.Module):
         heads=8,
         causal=False,
         mask=None,
-        talking_head=False,
+        talking_heads=False,
         head_scale=False,
         collab_heads=False,
         collab_compression=0.3,
@@ -342,5 +343,83 @@ class Attention(nn.Module):
         if zero_init_output:
             init_zero_(self.to_out)
 
-    def forward(self):
-        ...
+    def forward(
+        self,
+        x,
+        context=None,
+        mask=None,
+        context_mask=None,
+        attn_mask=None,
+        rel_pos=None,
+        sinusoidal_emb=None,
+        rotary_pos_emb=None,
+        prev_attn=None,
+        mem=None,
+    ):
+        b, n, _ = *x.shape
+        h = self.heads
+        talking_heads = self.talking_heads
+        collab_heads = self.collab_heads
+        head_scale = self.head_scale
+        device = x.device
+        has_context = exists(context)
+
+        kv_input = default(context, x)
+        q_input = x
+        k_input = kv_input
+        v_input = kv_input
+
+        if exists(mem):
+            k_input = torch.cat((mem, k_input), dim=-2)
+            v_input = torch.cat((mem, v_input), dim=-2)
+
+        if exists(sinusoidal_emb):
+            ## in SHORTFORMER, the query would start at a position offset
+            ## depending on the past cached memory
+            offset = k_input.shape[-2] - q_input.shape[-2]
+            q_input = q_input + sinusoidal_emb(q_input, offset=offset)
+            k_input = k_input + sinusoidal_emb(k_input)
+
+        q = self.to_q(q_input)
+        k = self.to_k(k_input)
+        v = self.to_v(v_input)
+
+        if not collab_heads:
+            q, k, v = map(
+                lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q, k, v)
+            )
+        else:
+            q = torch.einsum("b i d, h d -> b h i d", q, self.collab_mixing)
+            k = rearrange(k, "b n d -> b () n d")
+            v = rearrange(v, "b n (h d) -> b h n d", h=h)
+
+        input_mask = None
+        if any(map(exists, (mask, context_mask))):
+            q_mask = default(mask, lambda: torch.ones((b, n), device=device).bool())
+            k_mask = q_mask if not exists(context) else context_mask
+            k_mask = default(
+                k_mask, lambda: torch.ones((b, k.shape[-2]), device=device).bool()
+            )
+            q_mask = rearrange(q_mask, "b i -> b () i ()")
+            k_mask = rearrange(k_mask, "b j -> b () () j")
+            input_mask = q_mask * k_mask
+
+        if self.num_mem_kv > 0:
+            mem_k, mem_v = map(
+                lambda t: repeat(t, "h n d -> b h n d", b=b), (self.mem_k, self.mem_v)
+            )
+            k = torch.cat((mem_k, k), dim=-2)
+            v = torch.cat((mem_v, v), dim=-2)
+            if exists(input_mask):
+                input_mask = F.pad(input_mask, (self.num_mem_kv, 0), value=True)
+
+        if collab_heads:
+            k = k.expand(-1, h, -1, -1)
+
+        dots = torch.einsum("b h i d, b h j d -> b h i j", q, k) * self.scale
+        mask_value = max_neg_value(dots)
+
+        if exists(prev_attn):
+            dots = dots + prev_attn
+
+        pre_softmax_attn = dots.clone()
