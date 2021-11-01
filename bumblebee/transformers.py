@@ -12,8 +12,8 @@ from einops import rearrange, reduce, repeat
 
 ## constants
 DEFAULT_DIM_HEAD = 64
-INTERMEDIATES = namedtuple("INTERMEDIATES", ["pre_softmax_attn", "post_softmax_attn"])
-LAYER_INTERMEDIATES = namedtuple("INTERMEDIATES", ["hiddens", "attn_intermediates"])
+Intermediates = namedtuple("Intermediates", ["pre_softmax_attn", "post_softmax_attn"])
+LayerIntermediates = namedtuple("Intermediates", ["hiddens", "attn_intermediates"])
 
 ## helpers => functions
 
@@ -423,3 +423,66 @@ class Attention(nn.Module):
             dots = dots + prev_attn
 
         pre_softmax_attn = dots.clone()
+
+        if talking_heads:
+            dots = torch.einsum(
+                "b h i j, h k -> b k i j", dots, self.pre_softmax_proj
+            ).contiguous()
+
+        if exists(rel_pos):
+            dots = rel_pos(dots)
+
+        if exists(input_mask):
+            dots.masked_fill_(~input_mask, mask_value)
+            del input_mask
+
+        if exists(attn_mask):
+            assert (
+                2 <= attn_mask.ndim <= 4
+            ), "attn mask must have atleast 2 and atmost 4 dimensions"
+            if attn_mask.ndim == 2:
+                attn_mask = rearrange(attn_mask, "i j -> () () i j")
+            elif attn_mask.ndim == 3:
+                attn_mask = rearrange(attn_mask, "h i j -> () h i j")
+            dots.masked_fill_(~attn_mask, mask_value)
+
+        if self.causal:
+            i, j = dots.shape[-2:]
+            r = torch.arange(i, device=device)
+            mask = rearrange(r, "i -> () () i ()") < rearrange(r, "j -> () () () j")
+            mask = F.pad(mask, (j - i, 0), value=False)
+            dots.masked_fill_(mask, mask_value)
+            del mask
+
+        if exists(self.sparse_topk) and self.sparse_topk < dots.shape[-1]:
+            top, _ = dots.topk(self.sparse_topk, dim=-1)
+            vk = top[..., -1].unsqueeze(-1).expand_as(dots)
+            mask = dots < vk
+            dots.masked_fill_(mask, mask_value)
+            del mask
+
+        attn = self.attn_fn(dots, dim=-1)
+        post_softmax_attn = attn.clone()
+
+        attn = self.dropout(attn)
+
+        if talking_heads:
+            attn = torch.einsum(
+                "b h i j, h k -> b k i j", attn, self.post_softmax_proj
+            ).contiguous()
+
+        out = torch.einsum("b h i j, b h j d -> b h i d", attn, v)
+
+        if self.head_scale:
+            out *= self.head_scale_params
+
+        out = rearrange(out, "b h n d -> b n (h d)")
+
+        if exists(self.to_v_gate):
+            gates = self.gate_values(x)
+            out *= gates.sigmoid()
+
+        intermediates = Intermediates(
+            pre_softmax_attn=pre_softmax_attn, post_softmax_attn=post_softmax_attn
+        )
+        return self.to_out(out), intermediates
