@@ -127,3 +127,13 @@ def group_by_prefix_and_trim(prefix, d: dict):
     trimmer = lambda x: (x[0][len(prefix) :], x[1])
     kwargs_without_prefix = dict(map(trimmer, kwargs_with_prefix.items()))
     return kwargs_without_prefix, kwargs
+
+
+## activation functions
+
+
+class ReluSquared(nn.Module):
+    def forward(self, input):
+        return F.relu(input) ** 2
+
+
