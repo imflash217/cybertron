@@ -208,9 +208,11 @@ def shift(t, amount, mask=None):
 
 
 class GLU(nn.Module):
-    def __init__(self, in_dim, out_dim, activation):
+    """Applies Gated Linear Unit with custom activation function"""
+
+    def __init__(self, in_dim, out_dim, act):
         super().__init__()
-        self.act = activation
+        self.act = act
         self.proj = nn.Linear(in_dim, out_dim ** 2)
 
     def forward(self, x):
