@@ -602,3 +602,8 @@ class AttentionLayers(nn.Module):
         if macaron:
             ## adds a "feedforward" block before as per the paper.
             default_block = "f" + default_block
+
+        ## zero init
+        if zero_init_branch_output:
+            attn_kwargs = {**attn_kwargs, "zero_init_output": True}
+            ff_kwargs = {**ff_kwargs, "zero_init_output": True}
