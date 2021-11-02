@@ -607,3 +607,36 @@ class AttentionLayers(nn.Module):
         if zero_init_branch_output:
             attn_kwargs = {**attn_kwargs, "zero_init_output": True}
             ff_kwargs = {**ff_kwargs, "zero_init_output": True}
+
+        ## calculate layer block order
+        if exists(custom_layers):
+            layer_types = custom_layers
+        elif exists(par_ratio):
+            par_depth = depth * len(default_block)
+            assert 1 <= par_ratio <= par_depth, "par_ratio out of range"
+            default_block = tuple(filter(not_equals("f"), default_block))
+            par_attn = par_depth // par_ratio
+
+            ## 2/3 attention layer cutoff as suggested by PAR paper
+            depth_cut = par_depth * (2 // 3)
+            par_width = (depth_cut + depth_cut // par_attn) // par_attn
+            assert (
+                len(default_block) <= par_width
+            ), "default block is too large for par_ratio"
+            par_block = default_block + ("f",) * (par_width - len(default_block))
+            par_head = par_block * par_attn
+            layer_types = par_head + ("f",) * (par_depth - len(par_head))
+        elif exists(sandwich_coeff):
+            assert (
+                0 < sandwich_coeff <= depth
+            ), "sandwich coefficient should be less than depth"
+            layer_types = (
+                ("a",) * sandwich_coeff
+                + default_block * (depth - sandwich_coeff)
+                + ("f",) * sandwich_coeff
+            )
+        else:
+            layer_types = default_block * depth
+
+        self.layer_types = layer_types
+        self.num_attn_layers = len(list(filter(equals("a"), layer_types)))
