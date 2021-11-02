@@ -640,3 +640,6 @@ class AttentionLayers(nn.Module):
 
         self.layer_types = layer_types
         self.num_attn_layers = len(list(filter(equals("a"), layer_types)))
+
+        ## calculate token shifting
+        shift_tokens = cast_tuple(shift_tokens, len(layer_types))
