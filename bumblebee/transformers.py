@@ -521,7 +521,7 @@ class AttentionLayers(nn.Module):
         shift_tokens=0,
         sandwich_norm=False,
         zero_init_branch_output=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         ff_kwargs, kwargs = group_by_prefix_and_trim("ff_", kwargs)
@@ -643,3 +643,33 @@ class AttentionLayers(nn.Module):
 
         ## calculate token shifting
         shift_tokens = cast_tuple(shift_tokens, len(layer_types))
+
+        ## iterate and construct layers
+        for layer_type, layer_shift_tokens in zip(self.layer_types, shift_tokens):
+            if layer_type == "a":
+                layer = Attention(dim, heads=heads, causal=causal, **attn_kwargs)
+            elif layer_type == "c":
+                layer = Attention(dim, heads=heads, **attn_kwargs)
+            elif layer_type == "f":
+                layer = FeedForward(dim, **ff_kwargs)
+                layer = layer if not macaron else Scale(0.5, layer)
+            else:
+                raise Exception(f"invalid layer type: {layer_type}")
+
+            if layer_shift_tokens > 0:
+                shift_range_upper = layer_shift_tokens + 1
+                shift_range_lower = -layer_shift_tokens if not causal else 0
+                layer = ShiftTokens(range(shift_range_lower, shift_range_upper), layer)
+
+            if isinstance(layer, Attention) and exists(branch_fn):
+                layer = branch_fn(layer)
+
+            residual_fn = GRUGating if gate_residual else Residual
+            residual = residual_fn(dim, scale_residual=scale_residual)
+
+            if sandwich_norm:
+                norm = nn.ModuleList([norm_fn(), norm_fn()])
+            else:
+                norm = norm_fn()
+
+            self.layers.append(nn.ModuleList([norm, layer, residual]))
