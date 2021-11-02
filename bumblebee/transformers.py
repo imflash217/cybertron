@@ -588,3 +588,17 @@ class AttentionLayers(nn.Module):
         norm_fn = nn.Identity if use_rezero else norm_fn
 
         branch_fn = ReZero if use_rezero else None
+
+        if cross_attend and not only_cross:
+            ## "attention", "cross-attention", "feedforward"
+            default_block = ("a", "c", "f")
+        elif cross_attend and only_cross:
+            ## "cross-attention" and "feedforward"
+            default_block = ("c", "f")
+        else:
+            ## vanilla setting: "attention" and "feedforward"
+            default_block = ("a", "f")
+
+        if macaron:
+            ## adds a "feedforward" block before as per the paper.
+            default_block = "f" + default_block
