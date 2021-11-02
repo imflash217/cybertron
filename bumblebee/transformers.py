@@ -2,7 +2,7 @@
 PyTorch Implementation of Transformers architecture
 """
 
-
+from functools import partial
 from inspect import isfunction
 import torch
 import torch.nn as nn
@@ -523,4 +523,68 @@ class AttentionLayers(nn.Module):
         zero_init_branch_output=False,
         **kwargs
     ):
-        ...
+        super().__init__()
+        ff_kwargs, kwargs = group_by_prefix_and_trim("ff_", kwargs)
+        attn_kwargs, _ = group_by_prefix_and_trim("attn_", kwargs)
+
+        dim_head = attn_kwargs.get("dim_head", DEFAULT_DIM_HEAD)
+
+        self.dim = dim
+        self.depth = depth
+        self.layers = nn.ModuleList([])
+
+        self.has_pos_emb = position_infused_attn or rel_pos_bias or rotary_pos_emb
+        self.pia_pos_emb = (
+            FixedPositionalEmbedding(dim) if position_infused_attn else None
+        )
+
+        rotary_emb_dim = max(32, default(rotary_emb_dim, dim_head // 2))
+        self.rotary_pos_emb = (
+            RotaryEmbedding(rotary_emb_dim) if rotary_pos_emb else None
+        )
+
+        assert not (
+            alibi_pos_bias and rel_pos_bias
+        ), "you can only choose ALiBi positional bias or T5 relative positional bias; not BOTH"
+
+        assert (
+            rel_pos_num_buckets <= rel_pos_max_distance
+        ), "number of relative position buckets must be less than the relative position max distance"
+
+        if rel_pos_bias:
+            self.rel_pos = RelativePositionBias(
+                scale=dim_head ** 0.5,
+                causal=causal,
+                heads=heads,
+                num_buckets=rel_pos_num_buckets,
+                max_distance=rel_pos_max_distance,
+            )
+        elif alibi_pos_bias:
+            alibi_num_heads = default(alibi_num_heads, heads)
+            assert (
+                alibi_num_heads <= heads
+            ), "number of ALiBi heads must be <= total numbe rof heads"
+            assert causal, "ALiBi does not work with non-autoregressive mode just yet"
+            alibi_pos_klass = (
+                LearnedAlibiPositionalBias if alibi_learned else AlibiPositionalBias
+            )
+            self.rel_pos = alibi_pos_klass(heads=alibi_num_heads)
+        else:
+            self.rel_pos = None
+
+        assert not (
+            not pre_norm and sandwich_norm
+        ), "sandwichNorm cannot be used when preNorm is not used"
+        self.pre_norm = pre_norm
+        self.sandwich_norm = sandwich_norm
+
+        self.residual_attn = residual_attn
+        self.cross_residual_attn = cross_residual_attn
+        self.cross_attend = cross_attend
+
+        norm_class = ScaleNorm if use_scalenorm else nn.LayerNorm
+        norm_class = RMSNorm if use_rmsnorm else norm_class
+        norm_fn = partial(norm_class, dim)
+        norm_fn = nn.Identity if use_rezero else norm_fn
+
+        branch_fn = ReZero if use_rezero else None
