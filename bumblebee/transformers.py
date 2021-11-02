@@ -486,3 +486,41 @@ class Attention(nn.Module):
             pre_softmax_attn=pre_softmax_attn, post_softmax_attn=post_softmax_attn
         )
         return self.to_out(out), intermediates
+
+
+class AttentionLayers(nn.Module):
+    def __init__(
+        self,
+        dim,
+        depth,
+        heads=8,
+        causal=False,
+        cross_attend=False,
+        only_cross=False,
+        use_scalenorm=False,
+        use_rmsnorm=False,
+        use_rezero=False,
+        alibi_pos_bias=False,
+        alibi_num_heads=None,
+        alibi_learned=False,
+        rel_pos_bias=False,
+        rel_pos_num_buckets=32,
+        rel_pos_max_distance=128,
+        position_infused_attn=False,
+        rotary_pos_emb=False,
+        rotary_emb_dim=None,
+        custom_layers=None,
+        sandwich_coeff=None,
+        par_ratio=None,
+        residual_attn=False,
+        cross_residual_attn=False,
+        macaron=False,
+        pre_norm=True,
+        gate_residual=False,
+        scale_residual=False,
+        shift_tokens=0,
+        sandwich_norm=False,
+        zero_init_branch_output=False,
+        **kwargs
+    ):
+        ...
