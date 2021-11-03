@@ -155,6 +155,22 @@ class AbsolutePositionalEmbedding(nn.Module):
         return pos_emb * self.scale
 
 
+class FixedPositionalEmbedding(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        inv_freq = 1.0 / (1e4 ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer("inv_freq", inv_freq)
+
+    def forward(self, x, seq_dim=1, offset=0):
+        t = (
+            torch.arange(x.shape[seq_dim], device=x.device).type_as(self.inv_freq)
+            + offset
+        )
+        sinusoid_input = torch.einsum("i, j -> i j", t, self.inv_freq)
+        emb = torch.cat((sinusoid_input.sin(), sinusoid_input.cos()), dim=-1)
+        return rearrange(emb, "n d -> () n d")
+
+
 ## NORMS
 
 
