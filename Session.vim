@@ -36,12 +36,12 @@ setlocal fdn=20
 setlocal fen
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 165 - ((22 * winheight(0) + 16) / 32)
+let s:l = 228 - ((15 * winheight(0) + 11) / 23)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 165
-normal! 021|
+keepjumps 228
+normal! 038|
 tabnext 1
 badd +0 bumblebee/transformers.py
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0
