@@ -268,6 +268,24 @@ class AlibiPositionalBias(nn.Module):
         return qk_dots + self.bias
 
 
+class LearnedAlibiPositionalBias(AlibiPositionalBias):
+    def __init__(self, heads):
+        super().__init__(heads)
+        self.learned_logslopes = nn.Parameter(torch.log(self.slopes))
+
+    def forward(self, qk_dots):
+        h, i, j = *qk_dots.shape[-3:]
+        device = qk_dots.device
+        slopes = self.learned_logslopes.exp()
+        slopes = F.pad(slopes, (0, 0, 0, 0, 0, h - slopes.shape[1]))
+        if exists(self.bias) and self.bias.shape[-1] >= j:
+            bias = self.bias[..., :j]
+        else:
+            bias = torch.arange(j, device=device)
+            self.register_buffer("bias", bias, persistent=False)
+        return qk_dots + (bias * slopes)
+
+
 ## NORMS
 
 

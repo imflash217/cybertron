@@ -36,11 +36,11 @@ setlocal fdn=20
 setlocal fen
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 268 - ((14 * winheight(0) + 11) / 23)
+let s:l = 286 - ((14 * winheight(0) + 11) / 23)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 268
+keepjumps 286
 normal! 031|
 tabnext 1
 badd +0 bumblebee/transformers.py
