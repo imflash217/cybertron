@@ -299,6 +299,18 @@ class RotaryEmbedding(nn.Module):
         return rearrange(emb, "n d -> () () n d")
 
 
+def rotate_half(x):
+    x = rearrange(x, "... (j d) -> ... j d", j=2)
+    x1, x2 = x.unbind(dim=-2)
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary_pos_emb(t, freqs):
+    seq_len = t.shape[-2]
+    freqs = freqs[:, :, -seq_len:]
+    return (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
+
+
 ## NORMS
 
 
