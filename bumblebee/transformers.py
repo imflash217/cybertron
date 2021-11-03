@@ -311,6 +311,35 @@ def apply_rotary_pos_emb(t, freqs):
     return (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
 
 
+## Residual and Residual Gates
+
+
+class Residual(nn.Module):
+    def __init__(self, dim, scale_residual=False):
+        super().__init__()
+        self.residual_scale = nn.Parameter(torch.ones(dim)) if scale_residual else None
+
+    def forward(self, x, residual):
+        if exists(self.residual_scale):
+            residual *= self.residual_scale
+        return x + residual
+
+
+class GRUGating(nn.Module):
+    def __init__(self, dim, scale_residual=False):
+        super().__init__()
+        self.gru = nn.GRUCell(dim, dim)
+        self.residual_scale = nn.Parameter(torch.ones(dim)) if scale_residual else None
+
+    def forward(self, x, residual):
+        if exists(self.residual_scale):
+            residual *= self.residual_scale
+        gated_output = self.gru(
+            rearrange(x, "b n d -> (b n) d"), rearrange(residual, "b n d -> (b n) d")
+        )
+        return gated_output.reshape_as(x)
+
+
 ## NORMS
 
 
