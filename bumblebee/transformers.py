@@ -673,3 +673,33 @@ class AttentionLayers(nn.Module):
                 norm = norm_fn()
 
             self.layers.append(nn.ModuleList([norm, layer, residual]))
+
+    def forward(
+        self,
+        x,
+        context=None,
+        mask=None,
+        context_mask=None,
+        attn_mask=None,
+        mems=None,
+        return_hiddens=False,
+    ):
+        assert not (
+            self.cross_attend ^ exists(context)
+        ), "context must be passed in if cross_attend is set to True"
+
+        hiddens = []
+        intermediates = []
+        prev_attn = None
+        prev_cross_attn = None
+
+        mems = mems.copy() if exists(mems) else [None] * self.num_attn_layers
+
+        rotary_pos_emb = None
+        if exists(self.rotary_pos_emb):
+            max_rotary_emb_length = max(
+                list(map(lambda m: (m.shape[1] if exists(m) else 0) + x.shape[1], mems))
+            )
+            rotary_pos_emb = self.rotary_pos_emb(max_rotary_emb_length, x.device)
+
+
