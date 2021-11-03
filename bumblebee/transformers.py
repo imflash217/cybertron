@@ -407,6 +407,27 @@ def shift(t, amount, mask=None):
     return F.pad(t, pad, value=0.0)
 
 
+class ShiftTokens(nn.Module):
+    def __init__(self, shifts, fn):
+        super().__init__()
+        self.fn = fn
+        self.shifts = tuple(shifts)
+
+    def forward(self, x, **kwargs):
+        mask = kwargs.get("mask", None)
+        shifts = self.shifts
+        segments = len(shifts)
+        feats_per_shift = x.shape[-1] // segments
+        splitted = x.split(feats_per_shift, dim=-1)
+        segments_to_shift = splitted[:segments]
+        rest = splitted[segments:]
+        segments_to_shift = list(
+            map(lambda args: shift(*args, mask=mask), zip(segments_to_shift, shifts))
+        )
+        x = torch.cat((*segments_to_shift, *rest), dim=-1)
+        return self.fn(x, **kwargs)
+
+
 ## feedforward
 
 
