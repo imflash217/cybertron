@@ -228,6 +228,46 @@ class RelativePositionBias(nn.Module):
         return qk_dots + (bias * self.scale)
 
 
+class AlibiPositionalBias(nn.Module):
+    def __init__(self, heads):
+        super().__init__()
+        self.heads = heads
+        slopes = torch.Tensor(self._get_slopes(heads))
+        slopes = rearrange(slopes, "h -> () h () ()")
+        self.register_buffer("slopes", slopes, persistent=False)
+        self.register_buffer("bias", None, persistent=False)
+
+    @staticmethod
+    def _get_slopes(heads):
+        def get_slopes_power_of_2(n):
+            start = 2 ** (-(2 ** -(math.log2(n) - 3)))
+            ratio = start
+            return [start * ratio ** i for i in range(n)]
+
+        if math.log2(heads).is_integer():
+            return get_slopes_power_of_2(heads)
+
+        closest_power_of_2 = 2 ** math.floor(math.log2(heads))
+        return (
+            get_slopes_power_of_2(closest_power_of_2)
+            + get_slopes_power_of_2(2 * closest_power_of_2)[0::2][
+                0 : heads - closest_power_of_2
+            ]
+        )
+
+    def forward(self, qk_dots):
+        h, i, j = *qk_dots.shape[-3:]
+        device = qk_dots.device
+        if exists(self.bias) and self.bias.shape[-1] >= j:
+            return qk_dots + self.bias[..., :j]
+        bias = torch.arange(j, device=device)
+        bias = rearrange(bias, "j -> () () () j")
+        bias *= self.slopes
+        bias = F.pad(bias, (0, 0, 0, 0, 0, h - bias.shape[1]))
+        self.register_buffer("bias", bias, persistent=False)
+        return qk_dots + self.bias
+
+
 ## NORMS
 
 
