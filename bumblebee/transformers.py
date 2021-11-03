@@ -139,6 +139,22 @@ class ReluSquared(nn.Module):
         return F.relu(input) ** 2
 
 
+## positional embeddings
+
+
+class AbsolutePositionalEmbedding(nn.Module):
+    def __init__(self, dim, max_seq_len):
+        super().__init__()
+        self.scale = dim ** -0.5
+        self.emb = nn.Embedding(max_seq_len, dim)
+
+    def forward(self, x):
+        n = torch.arange(x.shape[1], device=x.device)
+        pos_emb = self.emb(n)
+        pos_emb = rearrange(pos_emb, "n d -> () n d")
+        return pos_emb * self.scale
+
+
 ## NORMS
 
 

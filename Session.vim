@@ -36,12 +36,12 @@ setlocal fdn=20
 setlocal fen
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 756 - ((19 * winheight(0) + 11) / 23)
+let s:l = 154 - ((11 * winheight(0) + 12) / 25)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 756
-normal! 021|
+keepjumps 154
+normal! 031|
 tabnext 1
 badd +0 bumblebee/transformers.py
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0
@@ -56,7 +56,6 @@ if filereadable(s:sx)
   exe "source " . fnameescape(s:sx)
 endif
 let &g:so = s:so_save | let &g:siso = s:siso_save
-nohlsearch
 let g:this_session = v:this_session
 let g:this_obsession = v:this_session
 doautoall SessionLoadPost
