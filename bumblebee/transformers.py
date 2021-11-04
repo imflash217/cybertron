@@ -212,7 +212,7 @@ class RelativePositionBias(nn.Module):
         return ret
 
     def forward(self, qk_dots):
-        i, j = *qk_dots.shape[-2:]
+        i, j = qk_dots.shape[-2:]
         device = qk_dots.device
         q_pos = torch.arange(i, dtype=torch.long, device=device)
         k_pos = torch.arnage(j, dtype=torch.long, device=device)
@@ -256,7 +256,7 @@ class AlibiPositionalBias(nn.Module):
         )
 
     def forward(self, qk_dots):
-        h, i, j = *qk_dots.shape[-3:]
+        h, i, j = qk_dots.shape[-3:]
         device = qk_dots.device
         if exists(self.bias) and self.bias.shape[-1] >= j:
             return qk_dots + self.bias[..., :j]
@@ -274,7 +274,7 @@ class LearnedAlibiPositionalBias(AlibiPositionalBias):
         self.learned_logslopes = nn.Parameter(torch.log(self.slopes))
 
     def forward(self, qk_dots):
-        h, i, j = *qk_dots.shape[-3:]
+        h, i, j = qk_dots.shape[-3:]
         device = qk_dots.device
         slopes = self.learned_logslopes.exp()
         slopes = F.pad(slopes, (0, 0, 0, 0, 0, h - slopes.shape[1]))
@@ -578,7 +578,7 @@ class Attention(nn.Module):
         prev_attn=None,
         mem=None,
     ):
-        b, n, _ = *x.shape
+        b, n, _ = x.shape
         h = self.heads
         talking_heads = self.talking_heads
         collab_heads = self.collab_heads
@@ -1117,3 +1117,22 @@ class TransformerWrapper(nn.Module):
             return out, attn_maps
 
         return out
+
+
+class ContinuousTransformerWrapper(nn.Module):
+    def __init__(
+        self,
+        *,
+        max_seq_len,
+        attn_layers,
+        dim_in=None,
+        dim_out=None,
+        emb_dim=None,
+        emb_dropout=0.0,
+        use_pos_emb=True,
+    ):
+        super().__init__()
+        assert isinstance(
+            attn_layers, AttentionLayers
+        ), "attention layers must be wither an Encoder or Decoder"
+
