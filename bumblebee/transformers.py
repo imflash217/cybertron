@@ -1084,36 +1084,36 @@ class TransformerWrapper(nn.Module):
             ## auto-handle masking after appending memory tokens
             if exists(mask):
                 mask = F.pad(mask, (num_mem, 0), vallue=True)
-            if self.shift_mem_down and exists(mems):
-                mems_l = mems[: self.shift_mem_down]
-                mems_r = mems[self.shift_mem_down :]
-                mems = [*mems_l, *mems_r]
+        if self.shift_mem_down and exists(mems):
+            mems_l = mems[: self.shift_mem_down]
+            mems_r = mems[self.shift_mem_down :]
+            mems = [*mems_l, *mems_r]
 
-            x, intermediates = self.attn_layers(
-                x, mask=mask, mems=mems, return_hiddens=True, **kwargs
+        x, intermediates = self.attn_layers(
+            x, mask=mask, mems=mems, return_hiddens=True, **kwargs
+        )
+        x = self.norm(x)
+
+        mem, x = x[:, :num_mem], x[:, num_mem:]
+
+        out = self.to_logits(x) if not return_embeddings else x
+
+        if return_mems:
+            hiddens = intermediates.hiddens
+            new_mems = (
+                list(map(lambda pair: torch.cat(pair, dim=-2), zip(mems, hiddens)))
+                if exists(mems)
+                else hiddens
             )
-            x = self.norm(x)
+            new_mems = list(
+                map(lambda t: t[..., -self.max_mem_len :, :].detach(), new_mems)
+            )
+            return out, new_mems
 
-            mem, x = x[:, :num_mem], x[:, num_mem:]
+        if return_attn:
+            attn_maps = list(
+                map(lambda t: t.post_softmax_attn, intermediates.attn_intermediates)
+            )
+            return out, attn_maps
 
-            out = self.to_logits(x) if not return_embeddings else x
-
-            if return_mems:
-                hiddens = intermediates.hiddens
-                new_mems = (
-                    list(map(lambda pair: torch.cat(pair, dim=-2), zip(mems, hiddens)))
-                    if exists(mems)
-                    else hiddens
-                )
-                new_mems = list(
-                    map(lambda t: t[..., -self.max_mem_len :, :].detach(), new_mems)
-                )
-                return out, new_mems
-
-            if return_attn:
-                attn_maps = list(
-                    map(lambda t: t.post_softmax_attn, intermediates.attn_intermediates)
-                )
-                return out, attn_maps
-
-            return out
+        return out
