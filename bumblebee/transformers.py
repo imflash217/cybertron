@@ -1135,4 +1135,45 @@ class ContinuousTransformerWrapper(nn.Module):
         assert isinstance(
             attn_layers, AttentionLayers
         ), "attention layers must be wither an Encoder or Decoder"
+        dim = attn_layers.dim
+        self.max_seq_len = max_seq_len
+        self.pos_emb = (
+            AbsolutePositionalEmbedding(dim, max_seq_len)
+            if (use_pos_emb and not attn_layers.has_pos_emb)
+            else always(0)
+        )
+        self.emb_dropout = nn.Dropout(emb_dropout)
+        self.project_in = nn.Linear(dim_in, dim) if exists(dim_in) else nn.Identity()
+        self.attn_layers = attn_layers
+        self.norm = nn.LayerNorm(dim)
+        self.project_out = nn.Linear(dim, dim_out) if exists(dim_out) else nn.Identity()
 
+    def forward(
+        self,
+        x,
+        return_embeddings=False,
+        mask=None,
+        return_attn=False,
+        mems=None,
+        **kwargs,
+    ):
+        b, n, _ = x.shape
+        device = x.device
+
+        x = self.project_in(x)
+        x = x + self.pos_emb(x)
+        x = self.emb_dropout(x)
+
+        x, intermediates = self.attn_layers(
+            x, mask=mask, mems=mems, return_hiddens=True, **kwargs
+        )
+        x = self.norm(x)
+
+        out = self.project_out(x) if not return_embeddings else x
+
+        if return_attn:
+            attn_maps = list(
+                map(lambda t: t.post_softmax_attn, intermediates.attn_intermediates)
+            )
+            return out, attn_maps
+        return out
