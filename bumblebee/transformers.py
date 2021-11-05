@@ -5,11 +5,14 @@ PyTorch Implementation of Transformers architecture
 import math
 from functools import partial
 from inspect import isfunction
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from entmax import entmax15
 from einops import rearrange, reduce, repeat
+
+import utils
 
 ## constants
 DEFAULT_DIM_HEAD = 64
@@ -19,66 +22,118 @@ LayerIntermediates = namedtuple("Intermediates", ["hiddens", "attn_intermediates
 ## helpers => functions
 
 
-def exists(value) -> bool:
-    """
-    Checks if the value exists or not
-    """
-    return value is not None
-
-
-def default(value, default):
-    """
-    If the "value" does not exists then the default is returned
-    """
-    if exists(value):
-        return value
-    return default() if isfunction(default) else default
-
-
-def cast_tuple(value, depth) -> tuple:
-    """
-    Casts a value into tuple into the required depth
-    """
-    return value if isinstance(value, tuple) else (val,) * depth
-
-
-def max_neg_value(tensor):
-    """Returns the maximum negative value that can be represented by the data type of the tensor"""
-    return -torch.finfo(tensor.dtype).max
-
-
-## helpers => classes
-
-
-class always:
-    """A callable class that always returns the init value when called"""
-
-    def __init__(self, value):
-        self.value = value
-
-    def __call__(self, *args, **kwargs):
-        return self.value
-
-
-class equals:
-    """A callable class that checks if the input is equal to the init value"""
-
-    def __init__(self, value):
-        self.value = value
-
-    def __call__(self, input, *args, **kwargs):
-        return input == self.value
-
-
-class not_equals:
-    """A callable class that checks if the input is not-equal to the init value"""
-
-    def __init__(self, value):
-        self.value = value
-
-    def __call__(self, input, *args, **kwargs):
-        return input != self.value
-
+## def exists(value) -> bool:
+##     """
+##     Checks if the value exists or not
+##     """
+##     return value is not None
+##
+##
+## def default(value, default):
+##     """
+##     If the "value" does not exists then the default is returned
+##     """
+##     if exists(value):
+##         return value
+##     return default() if isfunction(default) else default
+##
+##
+## def cast_tuple(value, depth) -> tuple:
+##     """
+##     Casts a value into tuple into the required depth
+##     """
+##     return value if isinstance(value, tuple) else (val,) * depth
+##
+##
+## def max_neg_value(tensor):
+##     """Returns the maximum negative value that can be represented by the data type of the tensor"""
+##     return -torch.finfo(tensor.dtype).max
+##
+##
+## ## helpers => classes
+##
+##
+## class always:
+##     """A callable class that always returns the init value when called"""
+##
+##     def __init__(self, value):
+##         self.value = value
+##
+##     def __call__(self, *args, **kwargs):
+##         return self.value
+##
+##
+## class equals:
+##     """A callable class that checks if the input is equal to the init value"""
+##
+##     def __init__(self, value):
+##         self.value = value
+##
+##     def __call__(self, input, *args, **kwargs):
+##         return input == self.value
+##
+##
+## class not_equals:
+##     """A callable class that checks if the input is not-equal to the init value"""
+##
+##     def __init__(self, value):
+##         self.value = value
+##
+##     def __call__(self, input, *args, **kwargs):
+##         return input != self.value
+##
+##
+## ## helpers => initialization
+##
+##
+## def init_zero_(layer):
+##     """inplace intializes the weights and biases of the layer to zero"""
+##     nn.init.constant_(layer.weight, 0.0)
+##     if exists(layer.bias):
+##         nn.init.constant_(layer.bias, 0.0)
+##
+##
+## ## helpers => keyword arguments
+##
+##
+## def pick_and_pop(keys, d: dict) -> dict:
+##     """
+##     pick all (key, val) pair from dictionary 'd' for all keys in 'keys'
+##     Then, return a new dict with those picked (key, val) pair
+##     """
+##     values = list(map(lambda key: d.pop(key), keys))
+##     return dict(zip(keys, values))
+##
+##
+## def string_begins_with(prefix: str, string: str) -> bool:
+##     """
+##     Checks whether the "string" begins with the "prefix"
+##     """
+##     return string.startswith(prefix)
+##
+##
+## def group_dict_by_keys(condition, d: dict):
+##     """
+##     Groups the given dict "d" into two parts whether the keys satisfy the condition or not
+##     """
+##     return_values = [dict(), dict()]
+##     for key in d.keys():
+##         match = bool(condition(key))  ## does the keys satisfy condition?
+##         idx = int(not match)  ## idx=0 if the keys staisfy the condition else 1
+##         return_values[idx][key] = d[key]
+##     return (*return_values,)
+##
+##
+## def group_by_key_prefix(prefix, d: dict):
+##     return group_dict_by_keys(partial(string_begins_with, prefix), d)
+##
+##
+## def group_by_prefix_and_trim(prefix, d: dict):
+##     kwargs_with_prefix, kwargs = group_by_key_prefix(prefix, d)
+##     trimmer = lambda x: (x[0][len(prefix) :], x[1])
+##     kwargs_without_prefix = dict(map(trimmer, kwargs_with_prefix.items()))
+##     return kwargs_without_prefix, kwargs
+##
 
 ## helpers => initialization
 
@@ -86,50 +141,8 @@ class not_equals:
 def init_zero_(layer):
     """inplace intializes the weights and biases of the layer to zero"""
     nn.init.constant_(layer.weight, 0.0)
-    if exists(layer.bias):
+    if utils.exists(layer.bias):
         nn.init.constant_(layer.bias, 0.0)
-
-
-## helpers => keyword arguments
-
-
-def pick_and_pop(keys, d: dict) -> dict:
-    """
-    pick all (key, val) pair from dictionary 'd' for all keys in 'keys'
-    Then, return a new dict with those picked (key, val) pair
-    """
-    values = list(map(lambda key: d.pop(key), keys))
-    return dict(zip(keys, values))
-
-
-def string_begins_with(prefix: str, string: str) -> bool:
-    """
-    Checks whether the "string" begins with the "prefix"
-    """
-    return string.startswith(prefix)
-
-
-def group_dict_by_keys(condition, d: dict):
-    """
-    Groups the given dict "d" into two parts whether the keys satisfy the condition or not
-    """
-    return_values = [dict(), dict()]
-    for key in d.keys():
-        match = bool(condition(key))  ## does the keys satisfy condition?
-        idx = int(not match)  ## idx=0 if the keys staisfy the condition else 1
-        return_values[idx][key] = d[key]
-    return (*return_values,)
-
-
-def group_by_key_prefix(prefix, d: dict):
-    return group_dict_by_keys(partial(string_begins_with, prefix), d)
-
-
-def group_by_prefix_and_trim(prefix, d: dict):
-    kwargs_with_prefix, kwargs = group_by_key_prefix(prefix, d)
-    trimmer = lambda x: (x[0][len(prefix) :], x[1])
-    kwargs_without_prefix = dict(map(trimmer, kwargs_with_prefix.items()))
-    return kwargs_without_prefix, kwargs
 
 
 ## activation functions
@@ -258,7 +271,7 @@ class AlibiPositionalBias(nn.Module):
     def forward(self, qk_dots):
         h, i, j = qk_dots.shape[-3:]
         device = qk_dots.device
-        if exists(self.bias) and self.bias.shape[-1] >= j:
+        if utils.exists(self.bias) and self.bias.shape[-1] >= j:
             return qk_dots + self.bias[..., :j]
         bias = torch.arange(j, device=device)
         bias = rearrange(bias, "j -> () () () j")
@@ -278,7 +291,7 @@ class LearnedAlibiPositionalBias(AlibiPositionalBias):
         device = qk_dots.device
         slopes = self.learned_logslopes.exp()
         slopes = F.pad(slopes, (0, 0, 0, 0, 0, h - slopes.shape[1]))
-        if exists(self.bias) and self.bias.shape[-1] >= j:
+        if utils.exists(self.bias) and self.bias.shape[-1] >= j:
             bias = self.bias[..., :j]
         else:
             bias = torch.arange(j, device=device)
@@ -320,7 +333,7 @@ class Residual(nn.Module):
         self.residual_scale = nn.Parameter(torch.ones(dim)) if scale_residual else None
 
     def forward(self, x, residual):
-        if exists(self.residual_scale):
+        if utils.exists(self.residual_scale):
             residual *= self.residual_scale
         return x + residual
 
@@ -332,7 +345,7 @@ class GRUGating(nn.Module):
         self.residual_scale = nn.Parameter(torch.ones(dim)) if scale_residual else None
 
     def forward(self, x, residual):
-        if exists(self.residual_scale):
+        if utils.exists(self.residual_scale):
             residual *= self.residual_scale
         gated_output = self.gru(
             rearrange(x, "b n d -> (b n) d"), rearrange(residual, "b n d -> (b n) d")
@@ -397,7 +410,7 @@ class RMSNorm(nn.Module):
 def shift(t, amount, mask=None):
     if amount == 0:
         return t
-    if exists(mask):
+    if utils.exists(mask):
         t = t.masked_fill(~mask[..., None], 0.0)
     ## here, we are shifting in -2 axis, by padding by -ve amount and +ve amount
     ## -ve amount of adding essentially cuts down into the axis
@@ -458,7 +471,7 @@ class FeedForward(nn.Module):
     ):
         super().__init__()
         dim_hidden = int(dim * mult)
-        dim_out = default(dim_out, dim)
+        dim_out = utils.default(dim_out, dim)
         act = ReluSquared() if relu_squared else nn.GELU()
 
         if glu:
@@ -584,18 +597,18 @@ class Attention(nn.Module):
         collab_heads = self.collab_heads
         head_scale = self.head_scale
         device = x.device
-        has_context = exists(context)
+        has_context = utils.exists(context)
 
-        kv_input = default(context, x)
+        kv_input = utils.default(context, x)
         q_input = x
         k_input = kv_input
         v_input = kv_input
 
-        if exists(mem):
+        if utils.exists(mem):
             k_input = torch.cat((mem, k_input), dim=-2)
             v_input = torch.cat((mem, v_input), dim=-2)
 
-        if exists(sinusoidal_emb):
+        if utils.exists(sinusoidal_emb):
             ## in SHORTFORMER, the query would start at a position offset
             ## depending on the past cached memory
             offset = k_input.shape[-2] - q_input.shape[-2]
@@ -617,9 +630,9 @@ class Attention(nn.Module):
 
         input_mask = None
         if any(map(exists, (mask, context_mask))):
-            q_mask = default(mask, lambda: torch.ones((b, n), device=device).bool())
-            k_mask = q_mask if not exists(context) else context_mask
-            k_mask = default(
+            q_mask = utils.default(mask, lambda: torch.ones((b, n), device=device).bool())
+            k_mask = q_mask if not utils.exists(context) else context_mask
+            k_mask = utils.default(
                 k_mask, lambda: torch.ones((b, k.shape[-2]), device=device).bool()
             )
             q_mask = rearrange(q_mask, "b i -> b () i ()")
@@ -632,16 +645,16 @@ class Attention(nn.Module):
             )
             k = torch.cat((mem_k, k), dim=-2)
             v = torch.cat((mem_v, v), dim=-2)
-            if exists(input_mask):
+            if utils.exists(input_mask):
                 input_mask = F.pad(input_mask, (self.num_mem_kv, 0), value=True)
 
         if collab_heads:
             k = k.expand(-1, h, -1, -1)
 
         dots = torch.einsum("b h i d, b h j d -> b h i j", q, k) * self.scale
-        mask_value = max_neg_value(dots)
+        mask_value = utils.max_neg_value(dots)
 
-        if exists(prev_attn):
+        if utils.exists(prev_attn):
             dots = dots + prev_attn
 
         pre_softmax_attn = dots.clone()
@@ -651,14 +664,14 @@ class Attention(nn.Module):
                 "b h i j, h k -> b k i j", dots, self.pre_softmax_proj
             ).contiguous()
 
-        if exists(rel_pos):
+        if utils.exists(rel_pos):
             dots = rel_pos(dots)
 
-        if exists(input_mask):
+        if utils.exists(input_mask):
             dots.masked_fill_(~input_mask, mask_value)
             del input_mask
 
-        if exists(attn_mask):
+        if utils.exists(attn_mask):
             assert (
                 2 <= attn_mask.ndim <= 4
             ), "attn mask must have atleast 2 and atmost 4 dimensions"
@@ -676,7 +689,7 @@ class Attention(nn.Module):
             dots.masked_fill_(mask, mask_value)
             del mask
 
-        if exists(self.sparse_topk) and self.sparse_topk < dots.shape[-1]:
+        if utils.exists(self.sparse_topk) and self.sparse_topk < dots.shape[-1]:
             top, _ = dots.topk(self.sparse_topk, dim=-1)
             vk = top[..., -1].unsqueeze(-1).expand_as(dots)
             mask = dots < vk
@@ -700,7 +713,7 @@ class Attention(nn.Module):
 
         out = rearrange(out, "b h n d -> b n (h d)")
 
-        if exists(self.to_v_gate):
+        if utils.exists(self.to_v_gate):
             gates = self.to_v_gate(x)
             out *= gates.sigmoid()
 
@@ -746,8 +759,8 @@ class AttentionLayers(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        ff_kwargs, kwargs = group_by_prefix_and_trim("ff_", kwargs)
-        attn_kwargs, _ = group_by_prefix_and_trim("attn_", kwargs)
+        ff_kwargs, kwargs = utils.group_by_prefix_and_trim("ff_", kwargs)
+        attn_kwargs, _ = utils.group_by_prefix_and_trim("attn_", kwargs)
 
         dim_head = attn_kwargs.get("dim_head", DEFAULT_DIM_HEAD)
 
@@ -760,7 +773,7 @@ class AttentionLayers(nn.Module):
             FixedPositionalEmbedding(dim) if position_infused_attn else None
         )
 
-        rotary_emb_dim = max(32, default(rotary_emb_dim, dim_head // 2))
+        rotary_emb_dim = max(32, utils.default(rotary_emb_dim, dim_head // 2))
         self.rotary_pos_emb = (
             RotaryEmbedding(rotary_emb_dim) if rotary_pos_emb else None
         )
@@ -782,7 +795,7 @@ class AttentionLayers(nn.Module):
                 max_distance=rel_pos_max_distance,
             )
         elif alibi_pos_bias:
-            alibi_num_heads = default(alibi_num_heads, heads)
+            alibi_num_heads = utils.default(alibi_num_heads, heads)
             assert (
                 alibi_num_heads <= heads
             ), "number of ALiBi heads must be <= total numbe rof heads"
@@ -831,12 +844,12 @@ class AttentionLayers(nn.Module):
             ff_kwargs = {**ff_kwargs, "zero_init_output": True}
 
         ## calculate layer block order
-        if exists(custom_layers):
+        if utils.exists(custom_layers):
             layer_types = custom_layers
-        elif exists(par_ratio):
+        elif utils.exists(par_ratio):
             par_depth = depth * len(default_block)
             assert 1 <= par_ratio <= par_depth, "par_ratio out of range"
-            default_block = tuple(filter(not_equals("f"), default_block))
+            default_block = tuple(filter(utils.not_equals("f"), default_block))
             par_attn = par_depth // par_ratio
 
             ## 2/3 attention layer cutoff as suggested by PAR paper
@@ -848,7 +861,7 @@ class AttentionLayers(nn.Module):
             par_block = default_block + ("f",) * (par_width - len(default_block))
             par_head = par_block * par_attn
             layer_types = par_head + ("f",) * (par_depth - len(par_head))
-        elif exists(sandwich_coeff):
+        elif utils.exists(sandwich_coeff):
             assert (
                 0 < sandwich_coeff <= depth
             ), "sandwich coefficient should be less than depth"
@@ -861,10 +874,10 @@ class AttentionLayers(nn.Module):
             layer_types = default_block * depth
 
         self.layer_types = layer_types
-        self.num_attn_layers = len(list(filter(equals("a"), layer_types)))
+        self.num_attn_layers = len(list(filter(utils.equals("a"), layer_types)))
 
         ## calculate token shifting
-        shift_tokens = cast_tuple(shift_tokens, len(layer_types))
+        shift_tokens = utils.cast_tuple(shift_tokens, len(layer_types))
 
         ## iterate and construct layers
         for layer_type, layer_shift_tokens in zip(self.layer_types, shift_tokens):
@@ -883,7 +896,7 @@ class AttentionLayers(nn.Module):
                 shift_range_lower = -layer_shift_tokens if not causal else 0
                 layer = ShiftTokens(range(shift_range_lower, shift_range_upper), layer)
 
-            if isinstance(layer, Attention) and exists(branch_fn):
+            if isinstance(layer, Attention) and utils.exists(branch_fn):
                 layer = branch_fn(layer)
 
             residual_fn = GRUGating if gate_residual else Residual
@@ -907,7 +920,7 @@ class AttentionLayers(nn.Module):
         return_hiddens=False,
     ):
         assert not (
-            self.cross_attend ^ exists(context)
+            self.cross_attend ^ utils.exists(context)
         ), "context must be passed in if cross_attend is set to True"
 
         hiddens = []
@@ -915,12 +928,12 @@ class AttentionLayers(nn.Module):
         prev_attn = None
         prev_cross_attn = None
 
-        mems = mems.copy() if exists(mems) else [None] * self.num_attn_layers
+        mems = mems.copy() if utils.exists(mems) else [None] * self.num_attn_layers
 
         rotary_pos_emb = None
-        if exists(self.rotary_pos_emb):
+        if utils.exists(self.rotary_pos_emb):
             max_rotary_emb_length = max(
-                list(map(lambda m: (m.shape[1] if exists(m) else 0) + x.shape[1], mems))
+                list(map(lambda m: (m.shape[1] if utils.exists(m) else 0) + x.shape[1], mems))
             )
             rotary_pos_emb = self.rotary_pos_emb(max_rotary_emb_length, x.device)
 
@@ -1024,7 +1037,7 @@ class TransformerWrapper(nn.Module):
         ), "Attention Layers must be either Encoder or Decoder"
 
         dim = attn_layers.dim
-        emb_dim = default(emb_dim, dim)
+        emb_dim = utils.default(emb_dim, dim)
 
         self.max_seq_len = max_seq_len
         self.max_mem_len = max_mem_len
@@ -1034,7 +1047,7 @@ class TransformerWrapper(nn.Module):
         self.pos_emb = (
             AbsolutePositionalEmbedding(emb_dim, max_seq_len)
             if (use_pos_emb and not attn_layers.has_pos_emb)
-            else always(0)
+            else utils.always(0)
         )
         self.emb_dropout = nn.Dropout(emb_dropout)
 
@@ -1051,7 +1064,7 @@ class TransformerWrapper(nn.Module):
         )
 
         ## memory tokens (like [cls]) from Memory Transformers paper
-        num_memory_tokens = default(num_memory_tokens, 0)
+        num_memory_tokens = utils.default(num_memory_tokens, 0)
         self.num_memory_tokens = num_memory_tokens
         if num_memory_tokens > 0:
             self.memory_tokens = nn.Parameter(torch.randn(num_memory_tokens, dim))
@@ -1082,9 +1095,9 @@ class TransformerWrapper(nn.Module):
             x = torch.cat((mem, x), dim=1)
 
             ## auto-handle masking after appending memory tokens
-            if exists(mask):
+            if utils.exists(mask):
                 mask = F.pad(mask, (num_mem, 0), vallue=True)
-        if self.shift_mem_down and exists(mems):
+        if self.shift_mem_down and utils.exists(mems):
             mems_l = mems[: self.shift_mem_down]
             mems_r = mems[self.shift_mem_down :]
             mems = [*mems_l, *mems_r]
@@ -1102,7 +1115,7 @@ class TransformerWrapper(nn.Module):
             hiddens = intermediates.hiddens
             new_mems = (
                 list(map(lambda pair: torch.cat(pair, dim=-2), zip(mems, hiddens)))
-                if exists(mems)
+                if utils.exists(mems)
                 else hiddens
             )
             new_mems = list(
@@ -1140,13 +1153,13 @@ class ContinuousTransformerWrapper(nn.Module):
         self.pos_emb = (
             AbsolutePositionalEmbedding(dim, max_seq_len)
             if (use_pos_emb and not attn_layers.has_pos_emb)
-            else always(0)
+            else utils.always(0)
         )
         self.emb_dropout = nn.Dropout(emb_dropout)
-        self.project_in = nn.Linear(dim_in, dim) if exists(dim_in) else nn.Identity()
+        self.project_in = nn.Linear(dim_in, dim) if utils.exists(dim_in) else nn.Identity()
         self.attn_layers = attn_layers
         self.norm = nn.LayerNorm(dim)
-        self.project_out = nn.Linear(dim, dim_out) if exists(dim_out) else nn.Identity()
+        self.project_out = nn.Linear(dim, dim_out) if utils.exists(dim_out) else nn.Identity()
 
     def forward(
         self,
@@ -1209,7 +1222,7 @@ class ViTransformerWrapper(nn.Module):
         self.norm = nn.LayerNorm(dim)
         self.mlp_head = (
             FeedForward(dim, dim_out=num_classes, dropout=dropout)
-            if exists(num_classes)
+            if utils.exists(num_classes)
             else None
         )
 
@@ -1226,7 +1239,7 @@ class ViTransformerWrapper(nn.Module):
         x = self.attn_layers(x)
         x = self.norm(x)
 
-        if not exists(self.mlp_head) or return_embeddings:
+        if not utils.exists(self.mlp_head) or return_embeddings:
             return x
 
         return self.mlp_head(x[:, 0])
@@ -1235,20 +1248,20 @@ class ViTransformerWrapper(nn.Module):
 class Bumblebee(nn.Module):
     def __init__(self, *, dim, tie_token_emb=False, **kwargs):
         super().__init__()
-        enc_kwargs, kwargs = group_by_prefix_and_trim("enc_", kwargs)
-        dec_kwargs, kwargs = group_by_prefix_and_trim("dec_", kwargs)
+        enc_kwargs, kwargs = utils.group_by_prefix_and_trim("enc_", kwargs)
+        dec_kwargs, kwargs = utils.group_by_prefix_and_trim("dec_", kwargs)
 
         assert (
             "dim" not in enc_kwargs and "dim" not in enc_kwargs
         ), "dimension of either encoder or decoder must be set with `dim` keyword"
 
-        enc_transformer_kwargs = pick_and_pop(["num_tokens", "max_seq_len"], enc_kwargs)
+        enc_transformer_kwargs = utils.pick_and_pop(["num_tokens", "max_seq_len"], enc_kwargs)
         enc_transformer_kwargs["emb_dropout"] = enc_kwargs.pop("emb_dropout", 0.0)
         enc_transformer_kwargs["num_memory_tokens"] = enc_kwargs.pop(
             "num_memory_tokens", None
         )
 
-        dec_transformer_kwargs = pick_and_pop(["num_tokens", "max_seq_len"], dec_kwargs)
+        dec_transformer_kwargs = utils.pick_and_pop(["num_tokens", "max_seq_len"], dec_kwargs)
         dec_transformer_kwargs["emb_dropout"] = dec_kwargs.pop("emb_dropout", 0.0)
 
         self.encoder = TransformerWrapper(
