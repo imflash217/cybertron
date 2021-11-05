@@ -1140,7 +1140,7 @@ class ViTransformerWrapper(nn.Module):
         return self.mlp_head(x[:, 0])
 
 
-class Bumblebee(nn.Module):
+class Cybertron(nn.Module):
     def __init__(self, *, dim, tie_token_emb=False, **kwargs):
         super().__init__()
         enc_kwargs, kwargs = utils.group_by_prefix_and_trim("enc_", kwargs)
