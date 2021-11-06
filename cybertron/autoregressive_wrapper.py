@@ -5,7 +5,7 @@ Autoregressive Wrapper
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
 from entmax import entmax_bisect
 
 import utils
@@ -93,7 +93,7 @@ class AutoregressiveWrapper(nn.Module):
 
     def forward(self, x, **kwargs):
         xi = x[:, :-1]
-        x0 = x[:, 1:]
+        xo = x[:, 1:]
 
         ## if the use supply a "mask" that is off only by one from the source sequence
         ## resolve it for them

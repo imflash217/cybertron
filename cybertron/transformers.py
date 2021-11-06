@@ -13,6 +13,7 @@ from entmax import entmax15
 from einops import rearrange, reduce, repeat
 
 import utils
+from autoregressive_wrapper import AutoregressiveWrapper
 
 ## constants
 DEFAULT_DIM_HEAD = 64
@@ -403,7 +404,7 @@ class Attention(nn.Module):
     ):
         super().__init__()
         self.scale = dim_head ** -0.5
-        self.head = heads
+        self.heads = heads
         self.causal = causal
         self.mask = mask
 
@@ -423,7 +424,7 @@ class Attention(nn.Module):
 
         ## add GLU gating for aggregated values (from "alphafold2" paper)
         self.to_v_gate = None
-        if self.gate_values:
+        if gate_values:
             self.to_v_gate = nn.Linear(dim, dim_v)
             nn.init.constant_(self.to_v_gate.weight, 0.0)
             nn.init.constant_(self.to_v_gate.bias, 1.0)
@@ -513,7 +514,7 @@ class Attention(nn.Module):
             v = rearrange(v, "b n (h d) -> b h n d", h=h)
 
         input_mask = None
-        if any(map(exists, (mask, context_mask))):
+        if any(map(utils.exists, (mask, context_mask))):
             q_mask = utils.default(
                 mask, lambda: torch.ones((b, n), device=device).bool()
             )

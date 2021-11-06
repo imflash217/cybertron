@@ -22,7 +22,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 def cycle():
     while True:
         prefix = torch.ones((BATCH_SIZE, 1)).long().to(device)
-        src = torch.randin(2, NUM_TOKENS, (BATCH_SIZE, ENC_SEQ_LEN)).long().to(device)
+        src = torch.randint(2, NUM_TOKENS, (BATCH_SIZE, ENC_SEQ_LEN)).long().to(device)
         tgt = torch.cat((prefix, src, src), dim=1)
         src_mask = torch.ones(BATCH_SIZE, src.shape[1]).bool().to(device)
         tgt_mask = torch.ones(BATCH_SIZE, tgt.shape[1]).bool().to(device)
@@ -45,6 +45,9 @@ model = Cybertron(
     dec_max_seq_len=DEC_SEQ_LEN,
 ).to(device)
 
+num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+print(f"model.parameters() = {num_params}")
 ## optimizer
 optim = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
@@ -56,6 +59,7 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
     ## loss.shape = (10,2024,512)
     loss = model(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
     loss.backward()
+    print("loss = ", loss.item())
 
     optim.step()
     optim.zero_grad()

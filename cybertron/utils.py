@@ -29,7 +29,7 @@ def cast_tuple(value, depth) -> tuple:
     """
     Casts a value into tuple into the required depth
     """
-    return value if isinstance(value, tuple) else (val,) * depth
+    return value if isinstance(value, tuple) else (value,) * depth
 
 
 def max_neg_value(tensor):
