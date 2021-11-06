@@ -2,6 +2,12 @@
 The utility module
 """
 
+from inspect import isfunction
+from functools import partial
+import math
+import torch
+import torch.nn.functional as F
+
 
 def exists(value) -> bool:
     """
@@ -113,7 +119,7 @@ def top_p(logits, thres=0.9):
     """Top Performing"""
     sorted_logits, sorted_indices = torch.sort(logits, descending=True)
     cum_probs = torch.sumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-    sorted_indices_to_remove = cum_probs > (1-thres)
+    sorted_indices_to_remove = cum_probs > (1 - thres)
     sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
     sorted_indices_to_remove[:, 0] = 0
     sorted_logits[sorted_indices_to_remove] = float("-inf")
@@ -121,9 +127,16 @@ def top_p(logits, thres=0.9):
 
 
 def top_k(logits, thres=0.9):
-    """Top-K truncates the set of logits considered to those with the highest values"""
-    ...
+    """returns top-k elements which satisfies > 'thres'"""
+    k = math.ceil((1 - thres) * logits.shape[-1])
+    val, idx = torch.topk(logits, k)
+    probs = torch.full_like(logits, float("-inf"))
+    return probs.scatter(1, ind, val)
 
 
-def top_a(logits, min_p_pow=1.0, min_p_ration=0.02):
-    ...
+def top_a(logits, min_p_pow=2.0, min_p_ratio=0.02):
+    probs = F.softmax(logits, dim=-1)
+    limit = torch.pow(torch.max(probs), min_p_pow) * min_p_ratio
+    logits[probs < limit] = float("-inf")
+    logits[probs >= limit] = 1.0
+    return logits

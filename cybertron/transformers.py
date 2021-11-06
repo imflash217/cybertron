@@ -4,7 +4,6 @@ PyTorch Implementation of Transformers architecture
 
 import math
 from functools import partial
-from inspect import isfunction
 
 import torch
 import torch.nn as nn

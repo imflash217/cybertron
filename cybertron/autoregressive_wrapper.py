@@ -2,8 +2,6 @@
 Autoregressive Wrapper
 """
 
-from math import ceil
-from functools import partial
 
 import torch
 from torch import nn
