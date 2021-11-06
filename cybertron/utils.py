@@ -104,3 +104,26 @@ def group_by_prefix_and_trim(prefix, d: dict):
     trimmer = lambda x: (x[0][len(prefix) :], x[1])
     kwargs_without_prefix = dict(map(trimmer, kwargs_with_prefix.items()))
     return kwargs_without_prefix, kwargs
+
+
+## nucleus
+
+
+def top_p(logits, thres=0.9):
+    """Top Performing"""
+    sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+    cum_probs = torch.sumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+    sorted_indices_to_remove = cum_probs > (1-thres)
+    sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
+    sorted_indices_to_remove[:, 0] = 0
+    sorted_logits[sorted_indices_to_remove] = float("-inf")
+    return sorted_logits.scatter(1, sorted_indices, sorted_logits)
+
+
+def top_k(logits, thres=0.9):
+    """Top-K truncates the set of logits considered to those with the highest values"""
+    ...
+
+
+def top_a(logits, min_p_pow=1.0, min_p_ration=0.02):
+    ...
