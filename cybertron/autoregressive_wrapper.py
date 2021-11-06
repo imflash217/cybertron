@@ -31,7 +31,7 @@ class AutoregressiveWrapper(nn.Module):
         seq_len,
         eos_token=None,
         temperature=1.0,
-        filter_logits_fn=top_k,
+        filter_logits_fn=utils.top_k,
         filter_thres=0.9,
         min_p_pow=2.0,
         min_p_ratio=0.02,
@@ -58,10 +58,10 @@ class AutoregressiveWrapper(nn.Module):
             mask = mask[:, -self.max_seq_len :]
             logits = self.net(x, mask=mask, **kwargs)[:, -1, :]
 
-            if filter_logits_fn in {top_k, top_p}:
+            if filter_logits_fn in {utils.top_k, utils.top_p}:
                 filtered_logits = filter_logits_fn(logits, thres=filter_thres)
                 probs = F.softmax(filtered_logits / temperature, dim=-1)
-            elif filter_logits_fn is top_a:
+            elif filter_logits_fn is utils.top_a:
                 filtered_logits = filter_logits_fn(
                     logits, min_p_pow=min_p_pow, min_p_ratio=min_p_ratio
                 )
