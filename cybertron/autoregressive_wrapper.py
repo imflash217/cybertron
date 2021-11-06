@@ -92,3 +92,18 @@ class AutoregressiveWrapper(nn.Module):
 
         self.net.train(was_training)
         return out
+
+    def forward(self, x, **kwargs):
+        xi = x[:, :-1]
+        x0 = x[:, 1:]
+
+        ## if the use supply a "mask" that is off only by one from the source sequence
+        ## resolve it for them
+        mask = kwargs.get("mask", None)
+        if mask is not None and mask.shape[1] == x.shape[1]:
+            mask = mask[:, :-1]
+            kwargs["mask"] = mask
+
+        out = self.net(xi, **kwargs)
+        loss = F.cross_entropy(out.transpose(1, 2), xo, ignore_index=self.ignore_index)
+        return loss
