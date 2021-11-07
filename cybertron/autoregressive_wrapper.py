@@ -54,7 +54,7 @@ class AutoregressiveWrapper(nn.Module):
             mask = torch.full_like(out, True, dtype=torch.bool, device=out.device)
 
         for _ in range(seq_len):
-            x = out[:, -self.max_seq_len]
+            x = out[:, -self.max_seq_len :]
             mask = mask[:, -self.max_seq_len :]
             logits = self.net(x, mask=mask, **kwargs)[:, -1, :]
 
