@@ -131,7 +131,7 @@ def top_k(logits, thres=0.9):
     k = math.ceil((1 - thres) * logits.shape[-1])
     val, idx = torch.topk(logits, k)
     probs = torch.full_like(logits, float("-inf"))
-    return probs.scatter(1, ind, val)
+    return probs.scatter(1, idx, val)
 
 
 def top_a(logits, min_p_pow=2.0, min_p_ratio=0.02):
