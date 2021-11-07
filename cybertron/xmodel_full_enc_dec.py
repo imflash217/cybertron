@@ -84,5 +84,5 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
         wandb.log({"incorrects": incorrects})
         wandb_table.add_data(i, loss.item(), incorrects, sample)
 
+        wandb.log({"samples": wandb_table})
         # print(f"inputs: {src}\npredicted: {sample}\nincorrects # {incorrects}")
-wandb.log({"samples": wandb_table})
