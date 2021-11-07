@@ -66,7 +66,7 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
 
     if i != 0 and i % GENERATE_EVERY == 0:
         model.eval()
-        src, _, src_mask, _ = next(cycle)
+        src, _, src_mask, _ = next(cycle())
         src = src[:1]
         src_mask = src_mask[:1]
         start_tokens = (torch.ones((1, 1)) * 1).long().to(device)
