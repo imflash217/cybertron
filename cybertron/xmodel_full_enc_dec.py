@@ -7,7 +7,7 @@ import torch
 from transformers import Cybertron
 
 wandb.init(project="Cybertron", entity="imflash217")
-wandb_table = wandb.Table(columns=["batch", "loss", "incorrects", "text"])
+wandb_table = wandb.Table(columns=["batch", "loss", "incorrects", "src", "predicted_sample"])
 
 ## Hyperparameters
 NUM_BATCHES = int(1e5)
@@ -82,7 +82,7 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
         incorrects = (src != sample).abs().sum()
 
         wandb.log({"incorrects": incorrects})
-        wandb_table.add_data(i, loss.item(), incorrects, sample)
+        wandb_table.add_data(i, loss.item(), incorrects, str(src), str(sample))
 
         wandb.log({"samples": wandb_table})
         # print(f"inputs: {src}\npredicted: {sample}\nincorrects # {incorrects}")
