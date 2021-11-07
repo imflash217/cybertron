@@ -7,7 +7,9 @@ import torch
 from transformers import Cybertron
 
 wandb.init(project="Cybertron", entity="imflash217")
-wandb_table = wandb.Table(columns=["batch", "loss", "incorrects", "src", "predicted_sample"])
+wandb_table = wandb.Table(
+    columns=["batch", "loss", "incorrects", "src", "predicted_sample"]
+)
 
 ## Hyperparameters
 NUM_BATCHES = int(1e5)
