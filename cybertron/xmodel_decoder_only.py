@@ -5,6 +5,7 @@ import wandb
 import torch
 
 from transformers import TransformerWrapper, Decoder
+from autoregressive_wrapper import AutoregressiveWrapper
 
 wandb.init(project="Cybertron_GPT", entity="imflash217")
 
@@ -33,8 +34,9 @@ model = TransformerWrapper(
     num_tokens=NUM_TOKENS,
     max_seq_len=SEQ_LEN,
     attn_layers=Decoder(dim=512, depth=12, heads=8),
-).to(device)
+)
 
+model = AutoregressiveWrapper(model).to(device)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
