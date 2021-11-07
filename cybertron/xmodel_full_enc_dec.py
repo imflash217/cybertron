@@ -62,7 +62,7 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
 
     ## loss.shape = (10,2024,512)
     loss = model(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
-    wandb.log({"loss": loss.items()})
+    wandb.log({"loss": loss.item()})
 
     loss.backward()
 
