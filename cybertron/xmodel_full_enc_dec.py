@@ -1,9 +1,13 @@
 """Full Encoder Decoder"""
 
 import tqdm
+import wandb
 import torch
 
 from transformers import Cybertron
+
+wandb.init(project="Cybertron", entity="imflash217")
+wandb_table = wandb.Table(columns=["batch", "loss", "incorrects", "text"])
 
 ## Hyperparameters
 NUM_BATCHES = int(1e5)
@@ -58,8 +62,11 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
 
     ## loss.shape = (10,2024,512)
     loss = model(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
+    wandb.log({"loss": loss.items()})
+
     loss.backward()
-    print("loss = ", loss.item())
+
+    ## print("loss = ", loss.item())
 
     optim.step()
     optim.zero_grad()
@@ -74,4 +81,7 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10, desc="training"):
         sample = model.generate(src, start_tokens, ENC_SEQ_LEN, src_mask=src_mask)
         incorrects = (src != sample).abs().sum()
 
-        print(f"inputs: {src}\npredicted: {sample}\nincorrects # {incorrects}")
+        wandb.log({"incorrects": incorrects})
+        wandb_table.add_data(i, loss.item(), incorrects, sample)
+
+        # print(f"inputs: {src}\npredicted: {sample}\nincorrects # {incorrects}")
