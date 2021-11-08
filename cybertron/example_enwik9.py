@@ -123,13 +123,13 @@ for i in tqdm.tqdm(range(NUM_BATCHES), desc="training", mininterval=10.0):
         inp = random.choice(valid_ds)[:-1]
         prime = decode_tokens(inp)
 
-        print("***" * 20)
+        print("\n", "***" * 20)
         print(f"prime = {prime}")
-        print("---" * 20)
+        print("\n", "---" * 20)
 
         sample = model.generate(inp, GENERATE_LENGTH)
         output_str = decode_tokens(sample)
 
-        print("---" * 20)
+        print("\n" , "---" * 20)
         print(f"output_str = {output_str}")
-        print("***" * 20)
+        print("\n", "***" * 20)
