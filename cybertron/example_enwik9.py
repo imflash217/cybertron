@@ -79,7 +79,7 @@ model = AutoregressiveWrapper(model).to(device)
 ## prepare enwik9 data
 
 with gzip.open("../data/enwik8.gz") as file:
-    X = np.fromstring(file.read(int(95e6)), dtype=np.unit8)
+    X = np.fromstring(file.read(int(95e6)), dtype=np.uint8)
     train_X, val_X = np.split(X, [int(90e6)])
     data_train = torch.from_numpy(train_X)
     data_val = torch.from_numpy(val_X)
