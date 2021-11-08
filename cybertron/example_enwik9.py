@@ -86,7 +86,7 @@ with gzip.open("../data/enwik8.gz") as file:
 
 ## creating dataloaders for train & validation sets
 train_ds = TextSamplerDataset(data_train, SEQ_LEN, device)
-valid_ds = TextSamplerDataset(data_val, SEQ_LEN, deice)
+valid_ds = TextSamplerDataset(data_val, SEQ_LEN, device)
 train_dl = cycle(DataLoader(train_ds, batch_size=BATCH_SIZE))
 valid_dl = cycle(DataLoader(valid_ds, batch_size=BATCH_SIZE))
 
